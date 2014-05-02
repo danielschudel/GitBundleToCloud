@@ -43,7 +43,7 @@ def upload(conn, bucketname, aws_key, aws_secret, source_path, keyname,
     """
     Parallel multipart upload.
     """
-    conn = S3Connection(aws_key, aws_secret)
+#    conn = S3Connection(aws_key, aws_secret)
     bucket = conn.get_bucket(bucketname)
 
     if guess_mimetype:
