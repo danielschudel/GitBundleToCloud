@@ -12,6 +12,8 @@ try:
 except:
     sys.exit("Could not import boto - try adding the \"python-boto\" package\n")
 
+import multipartUpload.py
+
 def verifyAwsOptions(options):
     """ Verify the provided AWS access values 
     These options can come from the options dictionary, or from the environment """
@@ -123,16 +125,39 @@ class Repository:
         print("  {0}".format(hasher.hexdigest()))
         pass
 
-    def upload(self, bucketKey):
-        """ Upload the bundle to offsite storage. """
-        print(" Uploading the bundle")
+    def _simpleUpload(self, s3Bucket):
+        """ Non multi-part upload. """
+        bucketKey               = boto.s3.key.Key(s3Bucket)
         bucketKey.key           = self.pathRemoteFile
         bucketKey.storage_class = self.options["awsStorageClass"]
         bucketKey.set_contents_from_filename(self.pathLocalFile)
-        print(" Uploading the SHA1SUM file")
-        bucketKey.key = self.pathRemoteSha1sum
-        bucketKey.set_contents_from_filename(self.pathLocalSha1sum)
         pass
+
+    def _multipartUpload(self, s3Connection):
+        """ Multi-part upload. """
+        multipartUpload.upload(s3Connection,
+                self.options["awsBucket"],
+                self.options["AWS_ACCESS_KEY_ID"],
+                self.options["AWS_SECRET_ACCESS_KEY"],
+                self.pathLocalFile,
+                self.pathRemoteFile)
+
+    def upload(self, s3Connection, s3Bucket):
+        """ Upload the bundle to offsite storage. """
+
+        # if < a size, simple upload, else, multipart
+        if os.path.getsize(self.pathLocalFile) < 100*1024*1024:
+            print(" Uploading the bundle (simple)")
+            self._simpleUpload(s3Bucket)
+        else:
+            print(" Uploading the bundle (multi-part)")
+            # TODO: use "try/except"
+            self._multipartUpload(s3Connection)
+
+        print(" Uploading the SHA1SUM file")
+        bucketKey        = boto.s3.key.Key(s3Bucket)
+        bucketKey.key    = self.pathRemoteSha1sum
+        bucketKey.set_contents_from_filename(self.pathLocalSha1sum)
 
     def createEncryption(self):
         """ Upload the bundle to offsite storage.
@@ -228,7 +253,6 @@ def bundleToS3(options):
 
     s3Connection = boto.connect_s3(options["AWS_ACCESS_KEY_ID"], options["AWS_SECRET_ACCESS_KEY"])
     s3Bucket     = s3Connection.get_bucket(options["awsBucket"])
-    s3Key        = boto.s3.key.Key(s3Bucket)
 
     # search options["baseDir"] looking for bare git repos
     repositories = getAllGitRepos(options)
@@ -241,6 +265,6 @@ def bundleToS3(options):
             repository.createBundle()
             repository.createEncryption()
             repository.createSha1sum()
-            repository.upload(s3Key)
+            repository.upload(s3Connection, s3Bucket)
             repository.purgeStaleBundles(s3Bucket)
             repository.deleteTempFiles()
