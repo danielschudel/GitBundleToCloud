@@ -38,12 +38,12 @@ def _upload_part(bucketname, aws_key, aws_secret, multipart_id, part_num,
     _upload()
 
 
-def upload(bucketname, aws_key, aws_secret, source_path, keyname,
+def upload(conn, bucketname, aws_key, aws_secret, source_path, keyname,
     acl='private', headers={}, guess_mimetype=True, parallel_processes=4):
     """
     Parallel multipart upload.
     """
-    conn = S3Connection(aws_key, aws_secret)
+#    conn = S3Connection(aws_key, aws_secret)
     bucket = conn.get_bucket(bucketname)
 
     if guess_mimetype:
