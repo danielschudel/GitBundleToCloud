@@ -39,7 +39,7 @@ def _upload_part(bucketname, aws_key, aws_secret, multipart_id, part_num,
 
 
 def upload(conn, bucketname, aws_key, aws_secret, source_path, keyname,
-    acl='private', headers={}, guess_mimetype=True, parallel_processes=4):
+    acl='private', headers={}, guess_mimetype=True, parallel_processes=4, reduced_redundancy=True):
     """
     Parallel multipart upload.
     """
@@ -50,7 +50,7 @@ def upload(conn, bucketname, aws_key, aws_secret, source_path, keyname,
         mtype = mimetypes.guess_type(keyname)[0] or 'application/octet-stream'
         headers.update({'Content-Type': mtype})
 
-    mp = bucket.initiate_multipart_upload(keyname, headers=headers)
+    mp = bucket.initiate_multipart_upload(keyname, headers=headers, reduced_redundancy=reduced_redundancy)
 
     source_size = os.stat(source_path).st_size
     bytes_per_chunk = max(int(math.sqrt(5242880) * math.sqrt(source_size)),

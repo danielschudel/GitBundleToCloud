@@ -138,12 +138,17 @@ class Repository:
 
     def _multipartUpload(self, s3Connection):
         """ Multi-part upload. """
+        rr = False
+        if self.options["awsStorageClass"] == "REDUCED_REDUNDANCY":
+            rr = True
+
         multipartUpload.upload(s3Connection,
                 self.options["awsBucket"],
                 self.options["AWS_ACCESS_KEY_ID"],
                 self.options["AWS_SECRET_ACCESS_KEY"],
                 self.pathLocalFile,
-                self.pathRemoteFile)
+                self.pathRemoteFile,
+                reduced_redundancy=rr)
 
     def upload(self, s3Connection, s3Bucket):
         """ Upload the bundle to offsite storage. """
