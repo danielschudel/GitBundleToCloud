@@ -86,6 +86,9 @@ class Repository:
     def __del__(self):
         pass
 
+    def getName(self):
+        return self.baseName
+
     def deleteTempFiles(self):
         """ Run through and delete any temporary files """
         for f in self.tmpFiles:
@@ -145,9 +148,9 @@ class Repository:
     def upload(self, s3Connection, s3Bucket):
         """ Upload the bundle to offsite storage. """
 
-        if False:
+        if True:
             # if < a size, simple upload, else, multipart
-            if os.path.getsize(self.pathLocalFile) < 100*1024*1024:
+            if os.path.getsize(self.pathLocalFile) < 50*1024*1024:
                 print(" Uploading the bundle (simple)")
                 self._simpleUpload(s3Bucket)
             else:
@@ -247,7 +250,7 @@ def getAllGitRepos(options):
                 candidates.append(r)
     return candidates
 
-def bundleToS3(options):
+def bundleToCloud(options):
     """ Starts the bundling process. """
     if False == verifyOptions(options):
         sys.exit()
@@ -262,6 +265,10 @@ def bundleToS3(options):
         if True == repository.isRemoteStale(s3Bucket):
             print("##################################")
             repository.dumpValues()
+#           m = re.match("encrypted/", repository.getName())
+#           if m:
+#               print(" Skipping")
+#               continue
             print(" Performing backup")
             repository.createBundle()
             repository.createEncryption()
