@@ -1,4 +1,5 @@
-# "Taken" from : https://gist.githubusercontent.com/fabiant7t/924094/raw/s3_multipart_upload.py
+# "Taken" from : https://gist.github.com/momirza/462a6d79f564a430134a#file-s3_multipart_upload-py
+# Which was forked from : https://gist.githubusercontent.com/fabiant7t/924094/raw/s3_multipart_upload.py
 
 import logging
 import math
@@ -7,7 +8,6 @@ from multiprocessing import Pool
 import os
 
 from boto.s3.connection import S3Connection
-from filechunkio import FileChunkIO
 
 
 def _upload_part(bucketname, aws_key, aws_secret, multipart_id, part_num,
@@ -22,9 +22,9 @@ def _upload_part(bucketname, aws_key, aws_secret, multipart_id, part_num,
             bucket = conn.get_bucket(bucketname)
             for mp in bucket.get_all_multipart_uploads():
                 if mp.id == multipart_id:
-                    with FileChunkIO(source_path, 'r', offset=offset,
-                        bytes=bytes) as fp:
-                        mp.upload_part_from_file(fp=fp, part_num=part_num)
+                    with open(source_path, 'r') as fp:
+                        fp.seek(offset)
+                        mp.upload_part_from_file(fp=fp, part_num=part_num, size=bytes)
                     break
         except Exception, exc:
             if retries_left:
@@ -38,12 +38,12 @@ def _upload_part(bucketname, aws_key, aws_secret, multipart_id, part_num,
     _upload()
 
 
-def upload(conn, bucketname, aws_key, aws_secret, source_path, keyname,
+def upload(bucketname, aws_key, aws_secret, source_path, keyname,
     acl='private', headers={}, guess_mimetype=True, parallel_processes=4):
     """
     Parallel multipart upload.
     """
-#    conn = S3Connection(aws_key, aws_secret)
+    conn = S3Connection(aws_key, aws_secret)
     bucket = conn.get_bucket(bucketname)
 
     if guess_mimetype:
