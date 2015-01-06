@@ -17,7 +17,7 @@ The decision to upload is taken only if the local repositiory is newer than the 
 Caveats
 -------
 * This currently only works with AWS/S3. More/other options will be added in the future.
-* AWS/S3 multi-part uploads are not supported yet. Bundles pushed to S3 are limited to about 500MB.
+* AWS/S3 multi-part uploads are not supported yet. Bundles pushed to S3 are limited to about 5GB.
 
 Example Repository Structure
 ----------------------------
@@ -90,9 +90,9 @@ Presented in order of importance:
 
 * Done: Remove temporary files when done.
 * Done: Add option for AWS reduced redundancy.
-* Add in support for Google Cloud Storage
-* AWS - Handle Multipart uploads.
+* AWS - Handle Multipart uploads (https://gist.github.com/fabiant7t/924094)
 * AWS - Validate Multipart uploads.
+* Add in support for Google Cloud Storage
 * Validate gpg.
 * Move away from subprocess.call() and do as much inline/stdin/stdout as possible.
 * Check to make sure "git", "gpg", and other required programs/libraries are installed.

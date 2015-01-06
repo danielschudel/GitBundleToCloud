@@ -12,21 +12,23 @@ try:
 except:
     sys.exit("Could not import boto - try adding the \"python-boto\" package\n")
 
+import multipartUpload
+
 def verifyAwsOptions(options):
     """ Verify the provided AWS access values 
     These options can come from the options dictionary, or from the environment """
 
-    for e in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
-        if e not in options:
-            if e in os.environ:
-                options[e] = os.environ[e]
+    for envKey in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        if envKey not in options:
+            if envKey in os.environ:
+                options[envKey] = os.environ[envKey]
 
 def verifyOptions(options):
     """ Verify existence of required options. Provide sane values for optional arguments. """
     success = True
 
     # These are the options that must be present
-    required = set();
+    required = set()
     required.add("awsBucket")
     required.add("symmetricKeyLabel")
     required.add("symmetricKey")
@@ -61,11 +63,11 @@ class Repository:
         self.repoPath        = _pathToRepo #: Full path to the repo directory
         self.baseName        = _pathToRepo[len(self.options["baseDir"])+1:] #: Just the repo name
         self.baseTimeName    = self.baseName + "." + timeString #: Repo name with a timestamp
-        self.flatName        = re.sub("/", "_", self.baseTimeName); #: replace directory components with '_'
+        self.flatName        = re.sub("/", "_", self.baseTimeName) #: replace directory components with '_'
         self.pathLocalBundle = "{0}/{1}.bundle".format(self.options["tmp"], self.flatName) #: temp file for the local git bundle
         self.tmpFiles = list()
         if re.match("encrypted/", self.baseName):
-            self.pathLocalBundle    += "." + self.options["symmetricKeyLabel"];
+            self.pathLocalBundle    += "." + self.options["symmetricKeyLabel"]
             self.pathLocalEncrypted  = self.pathLocalBundle + ".gpg" #: Local encrypted bundle filename
             self.pathLocalFile       = self.pathLocalEncrypted
             self.pathRemoteFile      = "{0}.bundle.{1}.gpg".format(self.baseTimeName, self.options["symmetricKeyLabel"]) #: Remote name
@@ -84,15 +86,17 @@ class Repository:
     def __del__(self):
         pass
 
+    def getName(self):
+        return self.baseName
+
     def deleteTempFiles(self):
         """ Run through and delete any temporary files """
-        for f in self.tmpFiles:
-            os.unlink(f)
+        for tmpFile in self.tmpFiles:
+            os.unlink(tmpFile)
 
     def dumpValues(self):
         print("{0}".format(self.baseName))
         print(" BaseTimeName   = {0}".format(self.baseTimeName))
-        pass
 
     def createBundle(self):
         """ Create the bundle of the Git repo """
@@ -105,12 +109,10 @@ class Repository:
         args.append(self.pathLocalBundle)
         args.append("--all")
         subprocess.call(args)
-        pass
 
     def createSha1sum(self):
         """ Create a sha1sum of the Git bundle """
         print(" Creating the independent SHA1SUM")
-        import hashlib
         BLOCKSIZE = 65536
         hasher = hashlib.sha1()
         with open(self.pathLocalFile, 'rb') as afile:
@@ -118,21 +120,48 @@ class Repository:
             while len(buf) > 0:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
-        s = open(self.pathLocalSha1sum, "w")
-        s.write("{0}  {1}\n".format(hasher.hexdigest(), os.path.basename(self.baseName)))
+        sha1sumFile = open(self.pathLocalSha1sum, "w")
+        sha1sumFile.write("{0}  {1}\n".format(hasher.hexdigest(), os.path.basename(self.baseName)))
         print("  {0}".format(hasher.hexdigest()))
-        pass
 
-    def upload(self, bucketKey):
-        """ Upload the bundle to offsite storage. """
-        print(" Uploading the bundle")
+    def _simpleUpload(self, s3Bucket):
+        """ Non multi-part upload. """
+        bucketKey               = boto.s3.key.Key(s3Bucket)
         bucketKey.key           = self.pathRemoteFile
         bucketKey.storage_class = self.options["awsStorageClass"]
         bucketKey.set_contents_from_filename(self.pathLocalFile)
-        print(" Uploading the SHA1SUM file")
-        bucketKey.key = self.pathRemoteSha1sum
-        bucketKey.set_contents_from_filename(self.pathLocalSha1sum)
-        pass
+
+    def _multipartUpload(self, s3Connection):
+        """ Multi-part upload. """
+        redRed = False
+        if self.options["awsStorageClass"] == "REDUCED_REDUNDANCY":
+            redRed = True
+
+        multipartUpload.upload(s3Connection,
+                self.options["awsBucket"],
+                self.options["AWS_ACCESS_KEY_ID"],
+                self.options["AWS_SECRET_ACCESS_KEY"],
+                self.pathLocalFile,
+                self.pathRemoteFile,
+                reduced_redundancy=redRed)
+
+    def upload(self, s3Connection, s3Bucket):
+        """ Upload the bundle to offsite storage. """
+
+        if True:
+            # if < a size, simple upload, else, multipart
+            if os.path.getsize(self.pathLocalFile) < 50*1024*1024:
+                print(" Uploading the bundle (simple)")
+                self._simpleUpload(s3Bucket)
+            else:
+                print(" Uploading the bundle (multi-part)")
+                # TODO: use "try/except"
+                self._multipartUpload(s3Connection)
+
+            print(" Uploading the SHA1SUM file")
+            bucketKey        = boto.s3.key.Key(s3Bucket)
+            bucketKey.key    = self.pathRemoteSha1sum
+            bucketKey.set_contents_from_filename(self.pathLocalSha1sum)
 
     def createEncryption(self):
         """ Upload the bundle to offsite storage.
@@ -183,16 +212,16 @@ class Repository:
     def getYoungestLocalMtime(self):
         """ Find the mtime of the youngest file in a local bundle """
         maxMtime = 0
-        name = "none"
+#       name = "none"
         for root, dirs, files in os.walk(self.repoPath):
-            for f in files:
+            for thisFile in files:
                 # Ignore the file if it is named "config", gitolite seems to like to touch it
-                if f == 'config':
+                if thisFile == 'config':
                     continue
-                mtime = os.stat(os.path.join(root, f)).st_mtime
+                mtime = os.stat(os.path.join(root, thisFile)).st_mtime
                 if mtime > maxMtime:
                     maxMtime = mtime
-                    name = os.path.join(root, f)
+#                   name = os.path.join(root, thisFile)
 #       print("{1} - Youngest local at {0}".format(name, int(maxMtime)))
         return maxMtime
 
@@ -221,14 +250,13 @@ def getAllGitRepos(options):
                 candidates.append(r)
     return candidates
 
-def bundleToS3(options):
+def bundleToCloud(options):
     """ Starts the bundling process. """
     if False == verifyOptions(options):
         sys.exit()
 
     s3Connection = boto.connect_s3(options["AWS_ACCESS_KEY_ID"], options["AWS_SECRET_ACCESS_KEY"])
     s3Bucket     = s3Connection.get_bucket(options["awsBucket"])
-    s3Key        = boto.s3.key.Key(s3Bucket)
 
     # search options["baseDir"] looking for bare git repos
     repositories = getAllGitRepos(options)
@@ -237,10 +265,26 @@ def bundleToS3(options):
         if True == repository.isRemoteStale(s3Bucket):
             print("##################################")
             repository.dumpValues()
+#           m = re.match("encrypted/", repository.getName())
+#           if m:
+#               print(" Skipping")
+#               continue
             print(" Performing backup")
             repository.createBundle()
             repository.createEncryption()
             repository.createSha1sum()
-            repository.upload(s3Key)
+            repository.upload(s3Connection, s3Bucket)
             repository.purgeStaleBundles(s3Bucket)
             repository.deleteTempFiles()
+
+# This code "taken" from http://rayofsolaris.net/blog/2012/s3-multipart-cleanup
+def checkForFailedMultipartUploads(options):
+    s3Connection = boto.connect_s3(options["AWS_ACCESS_KEY_ID"], options["AWS_SECRET_ACCESS_KEY"])
+    for bucket in s3Connection.get_all_buckets():
+        uploads = bucket.get_all_multipart_uploads()
+        for upload in uploads:
+            upload.cancel_upload()
+            # If another client is in the process of uploading, then it won't have been cancelled
+            uploads = bucket.get_all_multipart_uploads()
+            if len(bucket) > 0:
+                print "Warning: incomplete uploads still exist."
