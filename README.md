@@ -7,17 +7,16 @@ Bundle all Git repos in a directory tree and upload, with optional encryption, t
 
 Version
 -------
-0.0.1
+0.0.2
 
 Purpose
 -------
 Take all Git repos in a given directory, bundle them, optionally encrypt some, and upload to offsite "cloud" storage.
-The decision to upload is taken only if the local repositiory is newer than the remote backup.
+The decision to upload is taken only if the local repository is newer than the remote backup.
 
 Caveats
 -------
 * This currently only works with AWS/S3. More/other options will be added in the future.
-* AWS/S3 multi-part uploads are not supported yet. Bundles pushed to S3 are limited to about 5GB.
 
 Example Repository Structure
 ----------------------------
@@ -32,14 +31,14 @@ I use this with gitolite. My gitolite structure looks like this:
                 Repo-C.git
                 Repo-D.git
                 Repo-E.git
-            private/
-                Repo-E.git
-                Repo-F.git
-            public/
-                Repo-G.git
+        private/
+            Repo-E.git
+            Repo-F.git
+        public/
+            Repo-G.git
 
 The directory named ```encrypted``` is special. If it exists, repos in that directory will go through
-encryption (after bundle, before upload). The other directories are not significant and are just an
+encryption (after bundle, before upload). The other directory names are not significant and are just an
 artifact of my gitolite user/permission organization.
 
 You can nest in subdirectores, they will be handled appropriately when pushed offsite.
@@ -51,20 +50,21 @@ Use your own python program to specify your AWS credentials, and encryption keys
     #!/usr/bin/python
 
     import sys
-    sys.path.append("/mnt/flash/local/GitBundleToAWS")
-    import bundleToS3
+    sys.path.append("/mnt/flash/local/GitBundleToCloud")
+    import bundleToCloud
 
     options = dict()
     options["tmp"]                   = "/mnt/tmp"
     options["awsBucket"]             = "gitolite_bundles"
+    options["awsStorageClass"]       = "REDUCED_REDUNDANCY"
     options["symmetricKeyLabel"]     = "key0001"
-    options["symmetricKey"]          = "################################"
-    options["baseDir"]               = "/mnt/flash/NAS/gitolite/repositories"
-    options["AWS_ACCESS_KEY_ID"]     = "123456789890abcedfea"
-    options["AWS_SECRET_ACCESS_KEY"] = "asdf;lkjasdlkfjaslkdjfa;lskjdfalksjdfjkk"
-    options["keepNBundles"]          = 4
+    options["symmetricKey"]          = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    options["baseDir"]               = "/mnt/flash/gitolite/repositories"
+    options["AWS_ACCESS_KEY_ID"]     = "xxxxxxxxxxxxxxxxxxxx"
+    options["AWS_SECRET_ACCESS_KEY"] = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    options["keepNBundles"]          = 2
 
-    bundleToS3.bundleToS3(options)
+    bundleToCloud.bundleToCloud(options)
 
 Options
 -------
@@ -90,8 +90,8 @@ Presented in order of importance:
 
 * Done: Remove temporary files when done.
 * Done: Add option for AWS reduced redundancy.
-* AWS - Handle Multipart uploads (https://gist.github.com/fabiant7t/924094)
-* AWS - Validate Multipart uploads.
+* Done: AWS - Handle Multipart uploads (https://gist.github.com/fabiant7t/924094)
+* Done: AWS - Validate Multipart uploads.
 * Add in support for Google Cloud Storage
 * Validate gpg.
 * Move away from subprocess.call() and do as much inline/stdin/stdout as possible.
